@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>User Data Table</title>
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  <style>
+    table {
+      width: 50%;
+      border-collapse: collapse;
+      margin: 20px 0;
+    }
+    table, th, td {
+      border: 1px solid #ddd;
+      padding: 8px;
+      text-align: center;
+    }
+    th {
+      background-color: #f2f2f2;
+    }
+    button {
+      margin-top: 20px;
+      padding: 10px 15px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #45a049;
+    }
+    #generatePDFBtn, #searchPDFBtn {
+      margin-top: 20px;
+    }
+    #searchSection {
+      margin: 20px 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>User Data Table</h1>
+  <table id="userTable">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Email</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody id="tableBody">
+    </tbody>
+  </table>
+  <button onclick="addRow()">Add User</button>
+  <button id="generatePDFBtn" onclick="generatePdfForAllUsers()">Generate PDF for All Users</button>
+
+  <div id="searchSection">
+    <h2>Search PDF by Name</h2>
+    <input type="text" id="searchName" placeholder="Enter Name to Search PDF">
+    <button id="searchPDFBtn" onclick="searchPDF()">Search PDF</button>
+    <p id="pdfResult"></p>
+  </div>
+
+  <script>
+    const API_BASE_URL = "http://localhost:5000/api/users";
+
+    function addRow() {
+      const tableBody = document.getElementById('tableBody');
+      const rowId = tableBody.rows.length + 1; 
+      const row = document.createElement('tr');
+      row.innerHTML = ` 
+        <td><input type="text" placeholder="Enter Name" id="name${rowId}"></td>
+        <td><input type="email" placeholder="Enter Email" id="email${rowId}"></td>
+        <td><button onclick="saveRow(${rowId})">Save</button></td>
+      `;
+      tableBody.appendChild(row);
+    }
+
+    async function saveRow(rowId) {
+      const name = document.getElementById(`name${rowId}`).value;
+      const email = document.getElementById(`email${rowId}`).value;
+
+      if (!name || !email) {
+        alert('Please fill in both name and email');
+        return;
+      }
+
+      try {
+        const response = await axios.post(`${API_BASE_URL}/create`, { name, email });
+        if (response.status === 201) {
+          alert('User saved successfully!');
+          getAllUsers();
+        } else {
+          alert('Error while saving user data.');
+        }
+      } catch (error) {
+        console.error('Error:', error);
+        alert(`Error: ${error.message}`);
+      }
+    }
+
+    async function getAllUsers() {
+      try {
+        const response = await axios.get(`${API_BASE_URL}/findAll`);
+        const users = response.data;
+        document.getElementById('tableBody').innerHTML = '';
+        users.forEach(user => {
+          const row = document.createElement('tr');
+          row.innerHTML = `
+            <td>${user.name}</td>
+            <td>${user.email}</td>
+          `;
+          document.getElementById('tableBody').appendChild(row);
+        });
+      } catch (error) {
+        console.error('Error fetching users:', error);
+        alert('Error fetching users');
+      }
+    }
+
+    async function generatePdfForAllUsers() {
+      try {
+        const response = await axios.get(`${API_BASE_URL}/findAll`);
+        const users = response.data;
+
+        if (users.length > 0) {
+          const pdfResponse = await axios.post(`${API_BASE_URL}/generatePdf`, { users });
+
+          if (pdfResponse.status === 201) {
+            alert('PDF generated and saved to S3 successfully!');
+          } else {
+            alert('Error generating PDF');
+          }
+        } else {
+          alert('No users found to generate PDF');
+        }
+      } catch (error) {
+        console.error('Error fetching users or generating PDF:', error);
+        alert('Error fetching users or generating PDF');
+      }
+    }
+
+    async function searchPDF() {
+      const name = document.getElementById('searchName').value.trim();
+
+      if (!name) {
+        alert('Please enter a name to search');
+        return;
+      }
+
+      try {
+        const response = await axios.get(`${API_BASE_URL}/search-pdf/${encodeURIComponent(name)}`);
+        if (response.status === 200) {
+          document.getElementById('pdfResult').innerHTML = `PDF URL: <a href="${response.data.pdfUrl}" target="_blank">${response.data.pdfUrl}</a>`;
+        } else {
+          document.getElementById('pdfResult').textContent = 'PDF not found.';
+        }
+      } catch (error) {
+        console.error('Error searching for PDF:', error);
+        document.getElementById('pdfResult').textContent = 'Error searching for PDF.';
+      }
+    }
+
+    window.onload = getAllUsers;
+  </script>
+</body>
+</html>
